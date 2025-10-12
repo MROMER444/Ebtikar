@@ -1,0 +1,25 @@
+
+====== Request & Response ======
+Endpoint : /sp/verify-otp
+User     : N/A
+Request  : {
+  "msisdn": "218920920110",
+  "otp": "4567",
+  "device_type": "android"
+}
+Response : {
+  "success": true,
+  "message": "Response from aggregator",
+  "data": {
+    "messageCode": "00",
+    "success": {
+      "message": "OTP confirmed",
+      "subscriber": "exist",
+      "msisdn": "218920920110",
+      "status": "active",
+      "operator": "Libyana",
+      "expiration_date": "2032-08-11 15:56:54"
+    }
+  }
+}
+===============================

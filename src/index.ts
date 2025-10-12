@@ -1,14 +1,17 @@
 import express from "express";
-import connexNotificationsRouter from "./datasync/notification";
+import windowNotificationsRouter from "./datasync/notification";
+import windowsp from "./routes/sp.routes";
+import logger from "./middlewares/logger";
 
 const app = express();
 
-// Parse JSON and form-data globally
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(logger);
 
-// Mount router
-app.use("/connex-notifications", connexNotificationsRouter);
+app.use("/window-notifications", windowNotificationsRouter);
+app.use("/sp" , windowsp);
 
 app.listen(2000, () => {
   console.log("Server running on port 2000");
