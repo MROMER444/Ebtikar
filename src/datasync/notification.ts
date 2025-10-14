@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import axios, { post } from "axios";
+import axios from "axios";
 const router = Router();
 
 

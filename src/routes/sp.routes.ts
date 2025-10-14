@@ -7,8 +7,8 @@ const router = Router();
 let accessToken: string | null = null;
 let tokenExpiryTime: number | null = null;
 
-const AGGREGATOR_EMAIL = "example@email.com";
-const AGGREGATOR_PASSWORD = "password";
+const AGGREGATOR_EMAIL = "api-gamesleague@digitalfalcon.ly";
+const AGGREGATOR_PASSWORD = "G@m%#guE";
 
 
 export const isTokenValid = (): boolean => {
@@ -22,18 +22,16 @@ export const getValidToken = async (): Promise<string> => {
     if (isTokenValid()) {
         const remainingMs = tokenExpiryTime! - Date.now();
         const remainingMin = Math.floor(remainingMs / 60000);
-        console.log(` Token valid — expires in ~${remainingMin} minutes`);
         return accessToken!;
     }
 
-    console.log("Token expired or missing — fetching new one...");
 
     const formData = new FormData();
 
     formData.append("email", AGGREGATOR_EMAIL);
     formData.append("password", AGGREGATOR_PASSWORD);
 
-    const response = await axios.post("https://webhook.site/3df92686-3f42-471f-8d1e-03f72609b990",
+    const response = await axios.post("https://connextst.ebtekarcloud.com/external-api/auth-login",
         formData,
         { headers: formData.getHeaders() }
     );
@@ -42,11 +40,6 @@ export const getValidToken = async (): Promise<string> => {
     accessToken = data.access_token;
 
     tokenExpiryTime = Date.now() + data.expired_after * 1000;
-
-    console.log(
-        `✅ Token refreshed successfully. Expires in ${data.expired_after / 60} minutes`
-    );
-
     return accessToken!;
 
 }
@@ -55,13 +48,18 @@ export const getValidToken = async (): Promise<string> => {
 router.post("/auth-login", async (req: Request, res: Response) => {
     const { email, password } = req.body;
 
+    if (!email || !password) {
+        return res.status(400).json({ message: "please provide Email , Password" });
+    }
+
+
     const formData = new FormData();
     formData.append("email", email);
     formData.append("password", password)
 
     try {
         const response = await axios.post(
-            "https://webhook.site/3df92686-3f42-471f-8d1e-03f72609b990",
+            "https://connextst.ebtekarcloud.com/external-api/auth-login",
             formData,
             { headers: formData.getHeaders() });
 
@@ -79,20 +77,28 @@ router.get("/protected-script", async (req: Request, res: Response) => {
     const { targeted_element } = req.query;
     const authHeader = req.headers.authorization;
 
-    if (!authHeader) {
-        return res.status(401).json({ message: "Missing Authorization header from SP" });
-    }
+    const element = targeted_element?.toString().startsWith("#")
+        ? targeted_element
+        : `#${targeted_element}`;
 
     try {
+        let tokenToUse: string;
+
+        if (authHeader) {
+            tokenToUse = authHeader.startsWith("Bearer ") ? authHeader : `Bearer ${authHeader}`;
+        } else {
+            const token = await getValidToken();
+            tokenToUse = `Bearer ${token}`;
+            console.log(token);
+
+        }
+
+
         const response = await axios.get(
-            `https://webhook.site/1bf14403-d3e1-4a54-9a02-9f653f8af933`,
+            "https://connextst.ebtekarcloud.com/external-api/protected-script",
             {
-                headers: {
-                    Authorization: authHeader,
-                },
-                params: {
-                    targeted_element,
-                },
+                headers: { Authorization: tokenToUse },
+                params: { targeted_element: element },
             }
         );
 
@@ -107,9 +113,40 @@ router.get("/protected-script", async (req: Request, res: Response) => {
 });
 
 
+
+
+
 router.post("/send-otp", async (req: Request, res: Response) => {
     try {
-        const { msisdn, transaction_identify, device_type, otp_signature, dcb_script_owner } = req.body;
+        const { msisdn, device_type, otp_signature, dcb_script_owner, targeted_element } = req.body;
+
+        if (!msisdn || !device_type) {
+            return res.status(400).json({ message: "msisdn and device_type are required" });
+        }
+
+        const token = await getValidToken();
+
+        const protectedResponse = await axios.get(
+            "https://connextst.ebtekarcloud.com/external-api/protected-script",
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+                params: {
+                    targeted_element: targeted_element || "#cta_button",
+                },
+            }
+        );
+
+        const transaction_identify = protectedResponse.data?.success?.transaction_identify;
+
+        if (!transaction_identify) {
+            return res.status(500).json({
+                success: false,
+                message: "Failed to retrieve transaction_identify from protected-script",
+                data: protectedResponse.data,
+            });
+        }
 
         const formData = new URLSearchParams();
         formData.append("msisdn", msisdn);
@@ -119,9 +156,8 @@ router.post("/send-otp", async (req: Request, res: Response) => {
         if (otp_signature) formData.append("otp_signature", otp_signature);
         if (dcb_script_owner) formData.append("dcb_script_owner", dcb_script_owner);
 
-        const token = await getValidToken();
-
-        const response = await axios.post("https://webhook.site/5e9cbad7-9d73-4ef1-bcee-e4ed1b335efa",
+        const response = await axios.post(
+            "https://connextst.ebtekarcloud.com/external-api/login",
             formData,
             {
                 headers: {
@@ -133,20 +169,11 @@ router.post("/send-otp", async (req: Request, res: Response) => {
 
         const data = response.data;
 
-        if (data) {
-            res.status(200).json({
-                success: true,
-                message: "data has been fetched",
-                data: data || null
-            });
-        } else {
-
-            res.status(200).json({
-                success: data.status || false,
-                message: data.message || "No message from aggregator",
-                data: data.data || null,
-            });
-        }
+        res.status(200).json({
+            success: true,
+            message: "OTP request sent successfully",
+            data,
+        });
 
     } catch (error: any) {
         res.status(error.response?.status || 500).json({
@@ -156,6 +183,7 @@ router.post("/send-otp", async (req: Request, res: Response) => {
         });
     }
 });
+
 
 
 
@@ -208,8 +236,6 @@ router.post("/verify-otp", async (req: Request, res: Response) => {
             data: responseData,
         });
     } catch (error: any) {
-        console.log("Error calling aggregator:", error.response?.data || error.message);
-
         res.status(500).json({
             success: false,
             message: "Error calling aggregator",

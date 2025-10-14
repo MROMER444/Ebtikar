@@ -37,15 +37,6 @@ Response : ${JSON.stringify(parsedResponse, null, 2)}
 
 `;
 
-    // Console output
-    console.log(chalk.blue.bold("====== Request & Response ======"));
-    console.log(chalk.green("Endpoint :"), chalk.yellow(originalUrl));
-    if ((req as any).user)
-      console.log(chalk.green("User     :"), JSON.stringify((req as any).user, null, 2));
-    console.log(chalk.green("Request  :"), JSON.stringify(requestBody, null, 2));
-    console.log(chalk.green("Response :"), JSON.stringify(parsedResponse, null, 2));
-    console.log(chalk.blue.bold("==============================="));
-
     // Save to file
     fs.appendFileSync(logFile, logMessage);
 
