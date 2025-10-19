@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DCB Test Page</title>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+
+    h1 {
+      color: #333;
+    }
+
+    input {
+      margin: 5px 0;
+      padding: 8px;
+      width: 260px;
+    }
+
+    button {
+      padding: 8px 16px;
+      margin-top: 10px;
+      cursor: pointer;
+    }
+
+    #loader {
+      font-weight: bold;
+      margin-top: 10px;
+    }
+
+    .hidden_loader {
+      display: none;
+    }
+
+    #responseOutput {
+      white-space: pre-wrap;
+      margin-top: 20px;
+      background: #f8f8f8;
+      padding: 10px;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>DCB Test Page</h1>
+
+  <label for="msisdn">Enter MSISDN:</label><br>
+  <input type="text" id="msisdn" placeholder="e.g., 218912245321"><br>
+
+  <label for="deviceType">Device Type:</label><br>
+  <input type="text" id="deviceType" placeholder="web / android / ios" value="web"><br>
+
+  <button id="cta_button">Subscribe</button>
+
+  <pre id="responseOutput"></pre>
+  <div id="loader">Loading...</div>
+
+  <script>
+    $(document).ready(function () {
+      // Step 1: Request protected script
+      $.ajax({
+        url: 'http://api.window-technologies.com/sp/protected-script',
+        type: "GET",
+        data: { targeted_element: 'form-login' },
+        dataType: "json",
+        success: function (data) {
+          const dcbprotect = data.success.dcbprotect;
+          const transaction_identify = data.success.transaction_identify;
+
+          // Save them locally
+          localStorage.setItem('transaction_identify', transaction_identify);
+          localStorage.setItem('dcbprotect', dcbprotect);
+
+          // Inject the script
+          const script = document.createElement("script");
+          script.type = "text/javascript";
+          script.text = dcbprotect;
+          document.body.appendChild(script);
+
+          // Dispatch DCBProtectRun
+          document.dispatchEvent(new Event('DCBProtectRun'));
+
+          // Hide loader
+          document.getElementById("loader").classList.add("hidden_loader");
+        },
+        error: function (err) {
+          console.error("Error loading protected script:", err);
+          $('#responseOutput').text("Error loading protected script. Check console for details.");
+        }
+      });
+
+      // Step 2: Send OTP via backend
+      $('#cta_button').on('click', async function () {
+        const msisdn = $('#msisdn').val().trim();
+        const device_type = $('#deviceType').val().trim() || 'web';
+        const transaction_identify = localStorage.getItem('transaction_identify');
+        const dcbprotect = localStorage.getItem('dcbprotect');
+
+        if (!msisdn || !transaction_identify || !dcbprotect) {
+          alert("Please enter MSISDN and wait for the script to load.");
+          return;
+        }
+
+        try {
+          const resp = await fetch('http://api.window-technologies.com/sp/send-otp', {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              msisdn,
+              device_type,
+              transaction_identify,
+              dcbprotect
+            })
+          });
+
+          const data = await resp.json();
+          $('#responseOutput').text(JSON.stringify(data, null, 2));
+        } catch (err) {
+          console.error(err);
+          $('#responseOutput').text("Error: " + err.message);
+        }
+      });
+    });
+
+    // Hide loader when the gateway-load event is dispatched by the DCB script
+    document.addEventListener("gateway-load", function () {
+      document.getElementById("loader").classList.add("hidden_loader");
+    });
+  </script>
+</body>
+
+</html>

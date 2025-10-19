@@ -1,8 +1,14 @@
+//this si dev env
 import { Router, Request, Response } from "express";
 import axios from "axios";
 import FormData from "form-data";
 const router = Router();
+import express from "express";
+const app = express();
 
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 let accessToken: string | null = null;
 let tokenExpiryTime: number | null = null;
@@ -17,11 +23,12 @@ export const isTokenValid = (): boolean => {
 }
 
 
-
 export const getValidToken = async (): Promise<string> => {
     if (isTokenValid()) {
         const remainingMs = tokenExpiryTime! - Date.now();
         const remainingMin = Math.floor(remainingMs / 60000);
+
+        console.log("Remaining token validity (minutes):", remainingMin);
         return accessToken!;
     }
 
@@ -36,17 +43,55 @@ export const getValidToken = async (): Promise<string> => {
         { headers: formData.getHeaders() }
     );
 
+
     const data = response.data.data;
-    accessToken = data.access_token;
+    accessToken = data.access_token.trim();
 
     tokenExpiryTime = Date.now() + data.expired_after * 1000;
+    console.log("Access Token:", accessToken);
     return accessToken!;
+
+
 
 }
 
 
+async function getTransactionIdentify_dcbProtect(req: Request, res: Response): Promise<{ transaction_identify: string, dcbprotect: string }> {
+    const response = await axios.get("https://connextst.ebtekarcloud.com/external-api/protected-script",
+        {
+            headers: { Authorization: `Bearer ${await getValidToken()}` },
+            params: { targeted_element: "form-login" },
+
+        }
+    )
+
+    const transaction_identify = String(response.data.success.transaction_identify ?? "");
+    const dcbprotect = String(response.data.success.dcbprotect ?? "");
+    return { transaction_identify, dcbprotect };
+
+}
+
+
+
+router.get("/transaction-identify", async (req: Request, res: Response) => {
+
+    try {
+        const details = (await getTransactionIdentify_dcbProtect(req, res));
+        res.status(200).json({ transaction_identify_dcbprotect: details });
+    } catch (error: any) {
+        res.status(500).json({
+            message: "Error fetching transaction identify",
+            error: error.response?.data || error.message,
+        });
+    }
+});
+
+const allowedOrigins = ["http://api.window-technologies.com", "https://another.com"];
+
 router.post("/auth-login", async (req: Request, res: Response) => {
     const { email, password } = req.body;
+
+    console.log(req.body);
 
     if (!email || !password) {
         return res.status(400).json({ message: "please provide Email , Password" });
@@ -94,6 +139,9 @@ router.get("/protected-script", async (req: Request, res: Response) => {
         }
 
 
+        console.log("element:", element);
+
+
         const response = await axios.get(
             "https://connextst.ebtekarcloud.com/external-api/protected-script",
             {
@@ -112,41 +160,46 @@ router.get("/protected-script", async (req: Request, res: Response) => {
     }
 });
 
-
-
+function delay(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 
 router.post("/send-otp", async (req: Request, res: Response) => {
-    try {
-        const { msisdn, device_type, otp_signature, dcb_script_owner, targeted_element } = req.body;
+    console.log("this is the origin : ", req.headers.origin);
+    console.log("send otp request..........");
+    console.log("Body:", req.body);
 
-        if (!msisdn || !device_type) {
-            return res.status(400).json({ message: "msisdn and device_type are required" });
+    console.log("---------------------------------------------------------");
+
+
+    var origin = req.headers.origin || "";
+    origin = "http://my-custom-origin.com";
+    console.log("this is the Origin : ", origin);
+
+
+    if (allowedOrigins.includes(origin)) {
+        console.log("good to goooooo");
+    } else {
+        console.log("forbiden");
+
+    }
+
+
+    try {
+        const {
+            msisdn,
+            device_type,
+            otp_signature,
+            dcb_script_owner,
+            transaction_identify,
+        } = req.body;
+
+        if (!msisdn || !device_type || !transaction_identify) {
+            return res.status(400).json({ message: "Missing required fields" });
         }
 
         const token = await getValidToken();
-
-        const protectedResponse = await axios.get(
-            "https://connextst.ebtekarcloud.com/external-api/protected-script",
-            {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-                params: {
-                    targeted_element: targeted_element || "#cta_button",
-                },
-            }
-        );
-
-        const transaction_identify = protectedResponse.data?.success?.transaction_identify;
-
-        if (!transaction_identify) {
-            return res.status(500).json({
-                success: false,
-                message: "Failed to retrieve transaction_identify from protected-script",
-                data: protectedResponse.data,
-            });
-        }
 
         const formData = new URLSearchParams();
         formData.append("msisdn", msisdn);
@@ -156,34 +209,41 @@ router.post("/send-otp", async (req: Request, res: Response) => {
         if (otp_signature) formData.append("otp_signature", otp_signature);
         if (dcb_script_owner) formData.append("dcb_script_owner", dcb_script_owner);
 
+        console.log("token:", token);
+
         const response = await axios.post(
             "https://connextst.ebtekarcloud.com/external-api/login",
-            formData,
+            formData.toString(),
             {
                 headers: {
                     Accept: "application/json",
                     Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/x-www-form-urlencoded",
                 },
+                timeout: 10000,
             }
         );
 
-        const data = response.data;
+        console.log("data:", response.data);
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             message: "OTP request sent successfully",
-            data,
+            data: response.data,
         });
-
     } catch (error: any) {
-        res.status(error.response?.status || 500).json({
+        console.error("Error during OTP request:", error.message);
+
+        return res.status(error.response?.status || 500).json({
             success: false,
-            message: error.response?.data?.message || "Aggregator login failed",
-            error: error.response?.data || error.message,
+            message:
+                error.response?.data?.message ||
+                error.message ||
+                "Aggregator login failed",
+            error: error.response?.data || error.toString(),
         });
     }
 });
-
 
 
 
@@ -205,7 +265,7 @@ router.post("/verify-otp", async (req: Request, res: Response) => {
 
         const token = await getValidToken();
 
-        const response = await axios.post("https://webhook.site/957d26ec-466f-4229-aa86-f517ce54afdd",
+        const response = await axios.post("https://connextst.ebtekarcloud.com/external-api/login-confirm",
             formData,
             {
                 headers: {
