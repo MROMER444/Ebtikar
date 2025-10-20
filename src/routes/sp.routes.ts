@@ -1,5 +1,5 @@
 //this si dev env
-import { Router, Request, Response } from "express";
+import { Router, Request, Response, response } from "express";
 import axios from "axios";
 import FormData from "form-data";
 const router = Router();
@@ -304,6 +304,66 @@ router.post("/verify-otp", async (req: Request, res: Response) => {
 
     }
 
+});
+
+
+router.get("/subscriber-details", async (req: Request, res: Response) => {
+    try {
+        const { msisdn } = req.query;
+
+        if (!msisdn) {
+            return res.status(400).json({ message: "msisdn is required" });
+        } else {
+            const response = await axios.get("https://connextst.ebtekarcloud.com/external-api/subscriber-details",
+                {
+                    params: { msisdn },
+                    headers: {
+                        Accept: "application/json",
+                        Authorization: `Bearer ${await getValidToken()}`
+                    },
+                }
+            )
+            return res.status(200).json({ success: true, data: response.data });
+        }
+
+    } catch (error: any) {
+        return res.status(500).json({
+            success: false,
+            message: error.message,
+            details: error.response?.data || null,
+        });
+    }
+});
+
+
+
+
+
+router.get("/subscriber-transactions" , async (req: Request, res: Response) => {
+    try {
+        const { msisdn } = req.query;
+        if(!msisdn){
+            return res.status(400).json({ message: "msisdn is required" });
+        }else{
+            const response = await axios.get("https://connextst.ebtekarcloud.com/external-api/subscriber-transactions",
+                {
+                    params: { msisdn },
+                    headers: {
+                        Accept: "application/json",
+                        Authorization: `Bearer ${await getValidToken()}`
+                    },
+                }
+            )
+            return res.status(200).json({ success: true, data: response.data });
+        }
+
+    } catch (error : any) {
+        return res.status(500).json({
+            success: false,
+            message: error.message,
+            details: error.response?.data || null,
+        });
+    }
 });
 
 
