@@ -63,11 +63,13 @@
 
   <script>
     $(document).ready(function () {
-      // Step 1: Request protected script
       $.ajax({
         url: 'http://api.window-technologies.com/sp/protected-script',
         type: "GET",
         data: { targeted_element: 'form-login' },
+        headers: {
+          'spid': 'fc74233c-a922-4e03-8847-af887602243f'
+        },
         dataType: "json",
         success: function (data) {
           const dcbprotect = data.success.dcbprotect;
@@ -110,7 +112,7 @@
         try {
           const resp = await fetch('http://api.window-technologies.com/sp/send-otp', {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json" , 'spid': 'fc74233c-a922-4e03-8847-af887602243f' },
             body: JSON.stringify({
               msisdn,
               device_type,

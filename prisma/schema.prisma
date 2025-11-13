@@ -1,0 +1,75 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider          = "mysql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+model ServiceProvider {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  password     String
+  token        String?
+  callbackUrl  String?
+  status       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  providerName String   @default("")
+  serviceName  String
+  ipAddress    String   @default("")
+}
+
+model Admin {
+  id        String   @id @default(uuid())
+  username  String   @unique
+  email     String   @unique
+  password  String
+  role      String   @default("admin")
+  status    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model subscriber_details {
+  id              Int      @id @default(autoincrement())
+  msisdn          String
+  created_at      DateTime @default(now())
+  device_type     String
+  service_name    String
+  expiration_date DateTime
+  subscription    String
+  uuid            String
+  is_active       Boolean
+  request_data    Json
+}
+
+model unsubscribes {
+  id           Int      @id @default(autoincrement())
+  msisdn       String
+  service_name String
+  cancel_date  DateTime
+  cancel_by    String?
+  tracking_id  String?
+  status       String
+  request_data Json
+  created_at   DateTime @default(now())
+}
+
+model renewals {
+  id              Int      @id @default(autoincrement())
+  msisdn          String
+  service_name    String
+  debit_date      DateTime
+  expiration_date DateTime
+  transaction_id  String
+  conversation_id String
+  amount          Float
+  status          String
+  request_data    Json
+  created_at      DateTime @default(now())
+}
+
