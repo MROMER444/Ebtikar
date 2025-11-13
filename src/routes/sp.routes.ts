@@ -1,5 +1,5 @@
-//this si dev env
 import { Router, Request, Response } from "express";
+import req from "express";
 import axios from "axios";
 import FormData from "form-data";
 const router = Router();
@@ -335,13 +335,215 @@ router.post("/verify-otp", async (req: Request, res: Response) => {
 
         res.status(500).json({
             success: false,
-            message: "Error calling aggregator",
-            data: error.response?.data || null
+            message: error.response?.data || error.message,
         });
+    }
+});
+
+
+router.get("/subscriber-details", async (req: Request, res: Response) => {
+    const spid = req.headers["spid"] as string;
+    const spidheader = await getSpIdFromHeaders(spid);
+    if (!spidheader.success) {
+        return res.status(spidheader.status).json({ success: false, message: spidheader.message });
+    }
+    try {
+        const { msisdn } = req.query;
+
+        if (!msisdn) {
+            return res.status(400).json({ message: "msisdn is required" });
+        } else {
+            const response = await axios.get("https://connextst.ebtekarcloud.com/external-api/subscriber-details",
+                {
+                    params: { msisdn },
+                    headers: {
+                        Accept: "application/json",
+                        Authorization: `Bearer ${await getValidToken(spidheader.data?.email, spidheader.data?.password, req)}`
+                    },
+                }
+            )
+            return res.status(200).json({ success: true, data: response.data });
+        }
+
+    } catch (error: any) {
+        return res.status(500).json({
+            success: false,
+            message: error.message,
+            details: error.response?.data || null,
+        });
+    }
+});
+
+
+
+router.get("/subscriber-transactions", async (req: Request, res: Response) => {
+    const spid = req.headers["spid"] as string;
+    const spidheader = await getSpIdFromHeaders(spid);
+    if (!spidheader) {
+        return res.status(400).json({ message: "Invalid SP-ID in headers" });
+    }
+    try {
+        const { msisdn } = req.query;
+        if (!msisdn) {
+            return res.status(400).json({ message: "msisdn is required" });
+        } else {
+            const response = await axios.get("https://connextst.ebtekarcloud.com/external-api/subscriber-transactions",
+                {
+                    params: { msisdn },
+                    headers: {
+                        Accept: "application/json",
+                        Authorization: `Bearer ${await getValidToken(spidheader.data?.email, spidheader.data?.password, req)}`
+                    },
+                }
+            )
+            return res.status(200).json({ success: true, data: response.data });
+        }
+
+    } catch (error: any) {
+        return res.status(500).json({
+            success: false,
+            message: error.message,
+            details: error.response?.data || null,
+        });
+    }
+});
+
+
+
+
+router.post("/unsubscribe", async (req: Request, res: Response) => {
+    const { msisdn } = req.body;
+    if (!msisdn) {
+        return res.status(400).json({ message: "msisdn is required" });
+    }
+
+    const spid = req.headers["spid"] as string;
+    const spidheader = await getSpIdFromHeaders(spid);
+    if (!spidheader.success) {
+        return res.status(spidheader.status).json({ success: false, message: spidheader.message });
+    } else {
+        try {
+            const response = await axios.post("https://connextst.ebtekarcloud.com/external-api/unsubscribe",
+                new URLSearchParams({ msisdn }).toString(),
+                {
+                    headers: { "Content-Type": "application/x-www-form-urlencoded", Authorization: `Bearer ${await getValidToken(spidheader.data?.email, spidheader.data?.password, req)}` },
+                }
+            );
+            return res.status(200).json({ success: true, data: response.data });
+        } catch (error) {
+            return res.status(500).json({
+                success: false,
+                message: "Error during unsubscription",
+                details: error,
+            });
+        }
+    }
+
+});
+
+
+
+
+router.post("/unsubscribe-confirm", async (req: Request, res: Response) => {
+    const { msisdn, otp, device_type } = req.body;
+    if (!msisdn || !otp || !device_type) {
+        return res.status(400).json({ message: "msisdn , otp and device_type are required" });
+    }
+
+    const spid = req.headers["spid"] as string;
+    const spidheader = await getSpIdFromHeaders(spid);
+    if (!spidheader.success) {
+        return res.status(spidheader.status).json({ success: false, message: spidheader.message });
+    } else {
+        try {
+            const response = await axios.post("https://connextst.ebtekarcloud.com/external-api/unsubscribe-confirm",
+                new URLSearchParams({ msisdn, otp, device_type }).toString(),
+                {
+                    headers: { "Content-Type": "application/x-www-form-urlencoded", Authorization: `Bearer ${await getValidToken(spidheader.data?.email, spidheader.data?.password, req)}` },
+                }
+            );
+            return res.status(200).json({ success: true, data: response.data });
+        } catch (error: any) {
+            if (axios.isAxiosError(error)) {
+                if (error.response?.status === 422) {
+                    return res.status(422).json({
+                        success: false,
+                        message: "User is already unsubscribed or OTP is invalid/expired",
+                        details: error.response.data,
+                    });
+                }
+            }
+
+            return res.status(500).json({
+                success: false,
+                message: "Error during unsubscription confirmation",
+                details: error.message,
+            });
+        }
 
     }
 
 });
+
+
+
+router.post("/admin/direct-unsubscribe", async (req: Request, res: Response) => {
+  try {
+    const { msisdn } = req.body;
+
+    if (!msisdn) {
+      return res.status(400).json({ success: false, message: "MSISDN is required" });
+    }
+
+    // Get SP ID from header
+    const spid = req.headers["spid"] as string;
+    const spidheader = await getSpIdFromHeaders(spid);
+
+    if (!spidheader.success) {
+      return res.status(spidheader.status).json({ success: false, message: spidheader.message });
+    }
+
+    // Get valid token using your helper
+    const token = await getValidToken(spidheader.data?.email, spidheader.data?.password, req);
+
+    // Prepare the request to aggregator
+    const formData = new FormData();
+    formData.append("msisdn", msisdn);
+
+    const response = await axios.post(
+      "https://connextst.ebtekarcloud.com/external-api/direct-unsubscribe",
+      formData,
+      {
+        headers: {
+          ...formData.getHeaders(),
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    // Update DB
+    await prisma.subscriber_details.updateMany({
+      where: { msisdn },
+      data: { is_active: false },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `User ${msisdn} unsubscribed successfully`,
+      aggregator_response: response.data,
+    });
+
+  } catch (error: any) {
+    console.error("Direct unsubscribe error:", error.response?.data || error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Error during direct unsubscribe",
+      details: error.response?.data || error.message,
+    });
+  }
+});
+
+
 
 
 export default router;
